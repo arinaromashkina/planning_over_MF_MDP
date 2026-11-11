@@ -7,7 +7,14 @@ contract for Phase 4; nothing here is implemented until Phase 1 reproduction is 
 
 ## 4.1 Learned reward model  r_hat_psi(s, a, y, c)
 
-Separate response prediction from utility (brief §4.4). In the MF-MDP, s = (P, u), a = item.
+Separate response prediction from utility (brief §4.4). LABELING CONTRACT:
+- p_phi(y | s, a, c): a calibrated RESPONSE MODEL (probabilities over observed feedback).
+  Metrics: log-loss, AUC/PR-AUC, Brier, ECE, temporal calibration.
+- utility(y): a fixed, transparent mapping from feedback to satisfaction (chosen BEFORE
+  experiments; e.g. rating bucket -> utility, watch-ratio bucket -> utility).
+- r_hat(s, a): expected utility under the response model, combined with (or without) the
+  posterior-alignment term. Never report p_phi as a reward and never call utility(y) a
+  "learned reward".
 
 Available signals per dataset (from DATASETS.md):
 - ML-1M: rating value (>= 4 defines positives), timestamps (inter-event gaps as weak
@@ -34,12 +41,20 @@ including temporal calibration (GTS).
 
 V_omega(s) ~ E[ sum_k gamma^k r_{t+k} | s ] (brief §4.5).
 
+LABELING CONTRACT (required in all results and tables):
+- V_hat_LOG(s): trained by MC-return regression from LOGGED sequences. This estimates the
+  value of the LOGGING POLICY (the behavior that generated the data), NOT of the planner.
+  Every plot/table using it must say "logging-policy value".
+- V_hat_TARGET(s): value under the TARGET planning policy (Plan-1/Plan-K). Obtained only
+  via regression on planner rollouts (distillation) or off-policy correction with stated
+  assumptions. MC-from-logs can never be labeled as target-policy value.
+Conflating the two is a reporting error, not a modeling choice.
+
 V1 training data (honest about policy mismatch, brief §4.5): logged trajectories — for each
 user, the sequence of consumed items defines states s_t (refold-in along the ACTUAL history,
 not optimistic rollouts) and realized rewards r(s_t, a_t) under the paper's reward. MC
-return-to-go provides regression targets. => V_hat estimates the LOGGING POLICY's value.
-This is a known, documented bias when used as an MCTS leaf value: it biases search toward
-logged-behavior-like continuations. State it in every result; do not claim unbiasedness.
+return-to-go provides regression targets for V_hat_LOG. Using it as an MCTS leaf value biases
+search toward logged-behavior-like continuations — a known, documented bias.
 
 V1 model: ridge/kernel regression on state features (numpy-only, no torch needed):
 u (d), plus posterior-geometry features: tr(P), ||P||_F, catalog-mean leverage, history
@@ -47,7 +62,9 @@ length. V2 (server, torch): small MLP over the same features + item-popularity c
 
 Plug-in points (all behind config flags):
 - MCTS leaf evaluation replacing closed-form rho (measure depth reduction, RQ6/H6);
-- Plan-1 value: r(s+, a) + gamma * V_hat(s+) (one-step lookahead with learned leaf);
+- Plan-1 value: r(s+, a) + gamma * V_hat_LOG(s+) (one-step lookahead with learned leaf);
+- V_hat_TARGET via planner-rollout regression (distillation) — only if rollouts are
+  run against the REALIZED-feedback states, otherwise label stays logging-policy;
 - (Phase 5) uncertainty: ensemble of V_hat for epistemic-risk leaves.
 
 ## 4.3 Experiments (after reproduction)
