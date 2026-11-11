@@ -17,7 +17,13 @@ def exact_cosine_topl(
     consumed: tuple[int, ...],
     l: int,
 ) -> np.ndarray:
-    """Indices of the l unconsumed items with highest cosine similarity to u."""
+    """Indices of the l unconsumed items with highest cosine similarity to u.
+
+    Never returns consumed items: l is capped at the number of unconsumed items.
+    """
+    n_unconsumed = V.shape[0] - len(consumed)
+    if n_unconsumed == 0:
+        return np.empty(0, dtype=np.int64)
     norms = np.linalg.norm(V, axis=1)
     norms = np.where(norms == 0.0, 1.0, norms)
     u_norm = np.linalg.norm(u)
@@ -27,7 +33,7 @@ def exact_cosine_topl(
         scores = (V @ u) / (norms * u_norm)
     if consumed:
         scores[np.asarray(consumed, dtype=np.int64)] = -np.inf
-    l = min(l, V.shape[0])
+    l = max(1, min(l, n_unconsumed))
     part = np.argpartition(-scores, l - 1)[:l]
     return part[np.argsort(-scores[part], kind="stable")]
 

@@ -182,3 +182,57 @@ O(catalog·d²) for leverage, O(pool·d²) for Plan-1 values.
 - `outputs/diagnostics/plots/task1_leverage.png`, `task1_correlations.png`,
   `task2_alignment.png`, `task3_sensitivity.png`
 - Runner: `experiments/diagnostics/run_diagnostics.py` (tasks selectable: `1 2 3`)
+
+---
+
+## Addendum 2026-11-11 (Phase 4 reward audit, prompt §4) — CORRECTION
+
+This addendum corrects an error in the Task-3 interpretation above. The original report is
+preserved unmodified above; this addendum supersedes the affected claims.
+
+### 1. Component semantics (u vs u+) — established by code inspection + tests
+
+| component | state used | paper-exact? |
+|---|---|---|
+| `reward()` (mdp.py) | the `u` argument (call-site dependent) | eq. (8) as written |
+| Plan-1 canonical `paper` (was 'root') | current state `u`, Δs from fold-in | YES |
+| Plan-1 `post_transition` (was 'post') | post-transition `u+` for relevance | NO — variant |
+| Plan-1 `bellman` leaf term | `u+` for the leaf reward | NO — variant |
+| Plan-K edge reward | edge-origin node `u` | YES |
+| Plan-K closed-form leaf rho | node `u` | heuristic (documented) |
+| Plan-K tail padding (readout extension) | current state (fixed in audit) | extension, not paper |
+
+The pre-audit canonical Plan-1 ('post') used `sim(u+, v_a)` — a deviation from the paper's
+`sim(u, v_a)`. Phase 4 renames variants (`paper` = exact, `post_transition` = variant,
+aliases kept), defaults to `paper`, and adds tests (`tests/test_reward_audit.py`).
+
+### 2. Monotonicity in leverage ℓ (fixed residual q = 1 − uᵀv > 0)
+
+- Δ(ℓ) = ℓq/(1+ℓ): increasing in ℓ.
+- **Paper alignment 1/(1+|Δ|): DECREASING in ℓ** — the paper term penalizes large posterior
+  shifts; it does not amplify leverage/popularity.
+- Post-transition relevance uᵀv + Δ: INCREASING in ℓ — this popularity-amplifying property
+  belongs to the `post_transition` variant only, not to the paper reward.
+- Paper reward at fixed q: decreasing in ℓ.
+Tests: `test_alignment_decreases_in_leverage_fixed_residual`,
+`test_post_transition_relevance_increases_in_leverage`,
+`test_paper_reward_decreases_in_leverage_fixed_residual`,
+`test_monotonicity_via_states_fixed_udotv`.
+
+### 3. CORRECTION — the "full-catalog crash" was a candidate-generation bug
+
+The Task-3 row "pool=full → 0.044" and its attribution to a "self-boost popularity
+amplification" mechanism were WRONG. Root cause: `exact_cosine_topl` capped `l` at the raw
+catalog size instead of the number of UNCONSUMED items, so consumed (history) items leaked
+into the pool and crowded the top-10 (identical 0.0440 for both variants — the signature).
+After capping `l` at n_unconsumed, full-catalog Plan-1 = **0.0860** (both variants), equal to
+pool-100 and static_cosine. The "self-boost" discussion is retained only as a property of the
+`post_transition` variant (§2 above), not as an explanation of any measured degradation.
+
+### 4. Component correlations (reproduction config, 300 users, unconsumed catalog)
+
+corr(uᵀv, ‖v‖) = +0.29, corr(uᵀv, popularity) = +0.48, corr(uᵀv, ℓ) = +0.19,
+corr(uᵀv, alignment) = +0.23. Relevance loads on popularity more than on leverage; the
+alignment term is mildly positively correlated with relevance (via the (1−uᵀv) factor), i.e.
+it mildly favors already-endorsed items — at the catalog scale it is a tiebreaker, not a
+rank driver (consistent with Task 2).

@@ -39,7 +39,7 @@ class PlannerConfig:
     expansion_width: int = 20  # l
     n_simulations: int = 100
     horizon: int = 10  # K
-    plan1_variant: str = "post"  # post | root | bellman
+    plan1_variant: str = "paper"  # paper (exact eq.8 at current state) | post_transition | bellman
     plan1_pool: int = 100  # candidate pool size for Plan-1 re-ranking
 
 
@@ -51,8 +51,19 @@ def static_topk(V: np.ndarray, state: MFState, k: int, kind: str) -> list[int]:
     return list(part[np.argsort(-scores[part], kind="stable")])
 
 
-def _plan1_value_post(V, state, a, eta, sim):
-    """value(a) = r(s+, a): similarity of a in the folded-in state + alignment."""
+def _plan1_value_paper(V, state, a, eta, sim):
+    """Paper-exact one-step value: r(s, a) = sim(u, v_a) + eta/(1+|Delta_s(a)|), eq. (8).
+
+    Relevance is evaluated at the CURRENT state u (paper text); Delta_s comes from the
+    hypothetical fold-in of a.
+    """
+    v = V[a]
+    _, _, delta_s = fold_in(state, v)
+    return reward(state.u, v, delta_s, eta, sim)
+
+
+def _plan1_value_post_transition(V, state, a, eta, sim):
+    """VARIANT (not the paper reward): post-transition relevance, value = r(s+, a)."""
     v = V[a]
     _, u_plus, delta_s = fold_in(state, v)
     return reward(u_plus, v, delta_s, eta, sim)
@@ -78,13 +89,12 @@ def plan1_topk(V: np.ndarray, state: MFState, k: int, cfg: PlannerConfig) -> lis
     pool = exact_cosine_topl(V, state.u, state.consumed, cfg.plan1_pool)
     values = np.empty(len(pool))
     for i, a in enumerate(pool):
-        if cfg.plan1_variant == "post":
-            values[i] = _plan1_value_post(V, state, a, cfg.eta, cfg.sim)
-        elif cfg.plan1_variant == "root":
-            v = V[a]
-            _, _, delta_s = fold_in(state, v)
-            values[i] = reward(state.u, v, delta_s, cfg.eta, cfg.sim)
-        elif cfg.plan1_variant == "bellman":
+        variant = {"root": "paper", "post": "post_transition"}.get(cfg.plan1_variant, cfg.plan1_variant)
+        if variant == "paper":
+            values[i] = _plan1_value_paper(V, state, a, cfg.eta, cfg.sim)
+        elif variant == "post_transition":
+            values[i] = _plan1_value_post_transition(V, state, a, cfg.eta, cfg.sim)
+        elif variant == "bellman":
             values[i] = _plan1_value_bellman(
                 V, state, a, cfg.eta, cfg.gamma, cfg.sim, cfg.expansion_width
             )
@@ -200,7 +210,7 @@ def planK_topk(
         pool = exact_cosine_topl(V, leaf_state.u, leaf_state.consumed, cfg.expansion_width)
         if len(pool) == 0:
             break
-        values = [_plan1_value_post(V, leaf_state, a, cfg.eta, cfg.sim) for a in pool]
+        values = [_plan1_value_paper(V, leaf_state, a, cfg.eta, cfg.sim) for a in pool]
         a = int(pool[int(np.argmax(values))])
         recs.append(a)
         leaf_state, _ = transitioned(leaf_state, V[a], a)
