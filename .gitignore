@@ -218,3 +218,13 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Project: data, artifacts, logs, OS files
+data/
+outputs/
+checkpoints/
+logs/
+.DS_Store
+ml-1m.zip
+
+logs_*.txt

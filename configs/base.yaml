@@ -1,0 +1,32 @@
+seed: 0
+data_root_env: MFMDP_DATA_ROOT
+output_root_env: MFMDP_OUTPUT_ROOT
+
+dataset:
+  name: movielens-1m
+  min_rating: 4
+
+mf:
+  dim: 64
+  alpha: 40.0       # confidence c = 1 + alpha * x, x = 1[rating >= min_rating]
+  lam: 1.0          # regularization on the all-items precision
+  n_iter: 20
+  init_scale: 0.05
+
+split:
+  protocol: lln     # lln | gts
+  n_test: 1
+  n_valid: 1
+
+eval:
+  k: 10
+
+planner:
+  method: plan1     # static_dot | static_cos | plan1 | plank
+  eta: 1.0
+  gamma: 0.9
+  c_uct: 1.0
+  expansion_width: 20
+  n_simulations: 100
+  horizon: 10
+  plan1_variant: post   # post (r(s+,a)) | root (r(s0,a)) | bellman (r(s0,a)+gamma*max_b r(s1,b))

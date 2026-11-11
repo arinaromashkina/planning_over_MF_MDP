@@ -1,0 +1,30 @@
+# Reproduction run: MovieLens-1M, leave-last-1, cosine planners vs dot static.
+extends: ../base.yaml
+
+seed: 0
+run_name: movielens_lln_seed0
+
+run:
+  methods: [static_dot, static_cos, plan1, plank]
+
+dataset:
+  name: movielens-1m
+  min_rating: 4
+
+split:
+  protocol: lln
+  n_test: 1
+  n_valid: 1
+
+eval:
+  k: 10
+
+planner:
+  method: plan1
+  eta: 1.0
+  gamma: 0.9
+  c_uct: 1.0
+  expansion_width: 20
+  n_simulations: 100
+  horizon: 10
+  plan1_variant: post
