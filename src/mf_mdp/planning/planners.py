@@ -41,6 +41,11 @@ class PlannerConfig:
     horizon: int = 10  # K
     plan1_variant: str = "paper"  # paper (exact eq.8 at current state) | post_transition | bellman
     plan1_pool: int = 100  # candidate pool size for Plan-1 re-ranking
+    # Phase 4 extensions (all opt-in; defaults reproduce pre-Phase-4 behavior):
+    reward_fn: object | None = None  # (state, item) -> float; Plan-1 value override (R1/R2)
+    reward_bounds_override: tuple[float, float] | None = None  # for MCTS normalization w/ custom rewards
+    leaf_evaluator: str = "original"  # original | zero | heuristic | v_logging_ridge
+    value_model: object | None = None  # VLoggingRidge for leaf_evaluator=v_logging_ridge
 
 
 def static_topk(V: np.ndarray, state: MFState, k: int, kind: str) -> list[int]:
@@ -89,6 +94,9 @@ def plan1_topk(V: np.ndarray, state: MFState, k: int, cfg: PlannerConfig) -> lis
     pool = exact_cosine_topl(V, state.u, state.consumed, cfg.plan1_pool)
     values = np.empty(len(pool))
     for i, a in enumerate(pool):
+        if cfg.reward_fn is not None:
+            values[i] = cfg.reward_fn(state, a)
+            continue
         variant = {"root": "paper", "post": "post_transition"}.get(cfg.plan1_variant, cfg.plan1_variant)
         if variant == "paper":
             values[i] = _plan1_value_paper(V, state, a, cfg.eta, cfg.sim)
@@ -142,6 +150,13 @@ class _Node:
 _V: np.ndarray | None = None  # module-level cache for UCT cosine prior
 
 
+def _norm_reward(r: float, cfg: PlannerConfig) -> float:
+    if cfg.reward_bounds_override is not None:
+        lo, hi = cfg.reward_bounds_override
+        return (r - lo) / (hi - lo)
+    return normalize_reward(r, cfg.eta)
+
+
 def _greedy_rho(V: np.ndarray, node: _Node, cfg: PlannerConfig) -> float:
     """Closed-form leaf value: max normalized reward over the node's top-l candidates."""
     cand = exact_cosine_topl(V, node.u, node.consumed, cfg.expansion_width)
@@ -150,8 +165,25 @@ def _greedy_rho(V: np.ndarray, node: _Node, cfg: PlannerConfig) -> float:
         v = V[b]
         _, _, d_b = fold_in(node.state(), v)
         r_b = reward(node.u, v, d_b, cfg.eta, cfg.sim)
-        best = max(best, normalize_reward(r_b, cfg.eta))
+        best = max(best, _norm_reward(r_b, cfg))
     return best
+
+
+def _leaf_value(V: np.ndarray, node: _Node, cfg: PlannerConfig) -> float:
+    """Frontier leaf value G at a node, by configured leaf_evaluator.
+
+    v_logging_ridge returns the LOGGING-POLICY value V_logging(s_h) in normalized
+    reward units — it is NOT target-policy value (docs/PHASE4_DESIGN.md §4.2).
+    """
+    if cfg.leaf_evaluator == "v_logging_ridge":
+        if cfg.value_model is None:
+            raise ValueError("leaf_evaluator=v_logging_ridge requires value_model")
+        return float(np.clip(cfg.value_model.predict_value(node.state()), 0.0, 1.0 / (1.0 - cfg.gamma)))
+    if cfg.leaf_evaluator == "zero":
+        return 0.0
+    if cfg.leaf_evaluator in ("original", "heuristic"):
+        return _greedy_rho(V, node, cfg)
+    raise ValueError(f"unknown leaf_evaluator: {cfg.leaf_evaluator}")
 
 
 def _expand(V: np.ndarray, node: _Node, cfg: PlannerConfig) -> None:
@@ -159,14 +191,13 @@ def _expand(V: np.ndarray, node: _Node, cfg: PlannerConfig) -> None:
     for a in cand:
         v = V[a]
         P_plus, u_plus, delta_s = fold_in(node.state(), v)
-        r_norm = normalize_reward(reward(node.u, v, delta_s, cfg.eta, cfg.sim), cfg.eta)
+        r_norm = _norm_reward(reward(node.u, v, delta_s, cfg.eta, cfg.sim), cfg)
         child = _Node(MFState(P=P_plus, u=u_plus, consumed=tuple(sorted(node.consumed + (a,)))), node.depth + 1)
-        rho = _greedy_rho(V, child, cfg)
         child.N = 1
         node.children[a] = child
         node.edge_r[a] = r_norm
         node.edge_n[a] = 1
-        node.edge_q[a] = r_norm + cfg.gamma * rho
+        node.edge_q[a] = r_norm + cfg.gamma * _leaf_value(V, child, cfg)
 
 
 def planK_topk(
@@ -190,8 +221,8 @@ def planK_topk(
             path.append((node, a, child))
             node.N += 1
             node = child
-        # 3. Closed-form value at the frontier node.
-        G = _greedy_rho(V, node, cfg)
+        # 3. Leaf value at the frontier node.
+        G = _leaf_value(V, node, cfg)
         # 4. Backprop discounted return-to-go.
         for parent, a, child in reversed(path):
             G = parent.edge_r[a] + cfg.gamma * G

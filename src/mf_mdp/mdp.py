@@ -56,6 +56,31 @@ def fold_in(state: MFState, v: np.ndarray) -> tuple[np.ndarray, np.ndarray, floa
     return P_plus, u_plus, delta_s
 
 
+def fold_in_general(
+    state: MFState, v: np.ndarray, alpha_w: float, beta_w: float
+) -> tuple[np.ndarray, np.ndarray, float]:
+    """General weighted rank-one transition: A+ = A + alpha_w*v v', b+ = b + beta_w*v.
+
+    Sherman-Morrison (prompt §4.2):
+        z = P v,  l = v' P v,  denom = 1 + alpha_w * l
+        P+ = P - alpha_w * z z' / denom
+        u+ = u + z (beta_w - alpha_w * u'v) / denom
+
+    Special cases:
+        alpha_w=1, beta_w=1 -> optimistic paper transition (fold_in);
+        alpha_w=alpha, beta_w=1+alpha -> exact re-fold of adding item to history
+        under the eq. (2) convention (confidence c = 1 + alpha).
+    """
+    z = state.P @ v
+    l = float(v @ z)
+    denom = 1.0 + alpha_w * l
+    u_dot_v = float(state.u @ v)
+    delta_s = l * (beta_w - alpha_w * u_dot_v) / denom
+    P_plus = state.P - alpha_w * np.outer(z, z) / denom
+    u_plus = state.u + z * (beta_w - alpha_w * u_dot_v) / denom
+    return P_plus, u_plus, delta_s
+
+
 def transitioned(state: MFState, v: np.ndarray, item: int) -> tuple[MFState, float]:
     """fold_in + build the successor state, appending `item` to the consumed set."""
     P_plus, u_plus, delta_s = fold_in(state, v)

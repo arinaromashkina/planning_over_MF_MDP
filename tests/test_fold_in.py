@@ -64,6 +64,32 @@ def test_fold_in_matches_direct_wls():
     np.testing.assert_allclose(u_plus, u_direct, atol=1e-8)
 
 
+def test_fold_in_general_equals_refold():
+    """(alpha_w, beta_w) = (alpha, 1+alpha) must equal re-folding with the item in history."""
+    from mf_mdp.mdp import fold_in_general
+
+    rng = np.random.default_rng(6)
+    V, cfg, state = make_state(rng)
+    a = 7
+    P_plus, u_plus, _ = fold_in_general(state, V[a], cfg.alpha, 1.0 + cfg.alpha)
+    refold = user_state(V, np.array([0, 3, a]), cfg)
+    np.testing.assert_allclose(P_plus, refold.P, atol=1e-8)
+    np.testing.assert_allclose(u_plus, refold.u, atol=1e-8)
+
+
+def test_fold_in_general_optimistic_matches_fold_in():
+    from mf_mdp.mdp import fold_in_general
+
+    rng = np.random.default_rng(7)
+    V, cfg, state = make_state(rng)
+    a = 7
+    p1, u1, d1 = fold_in(state, V[a])
+    p2, u2, d2 = fold_in_general(state, V[a], 1.0, 1.0)
+    np.testing.assert_allclose(p1, p2, atol=1e-12)
+    np.testing.assert_allclose(u1, u2, atol=1e-12)
+    np.testing.assert_allclose(d1, d2, atol=1e-12)
+
+
 def test_delta_s_formula():
     rng = np.random.default_rng(3)
     V, _, state = make_state(rng)
