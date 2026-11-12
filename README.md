@@ -102,6 +102,7 @@ outputs/                 ← run artifacts (git-ignored)
 
 ## Documentation
 
+- [paper/ARTICLE.md](paper/ARTICLE.md) — **the article draft** (abstract, intro, problem statement, method, results, limitations) with [references.bib](paper/references.bib)
 - [RESEARCH_PLAN.md](docs/RESEARCH_PLAN.md) — research questions and phase map
 - [REPRODUCTION.md](docs/REPRODUCTION.md) — reproduction protocol and verdict
 - [PLANNING_DIAGNOSTICS.md](docs/PLANNING_DIAGNOSTICS.md) — leverage/alignment analysis (+ audit addendum)
