@@ -13,6 +13,38 @@ long-horizon recommendation decisions over the original **optimistic** MF-MDP
 true dynamics and exact oracles, as a function of state-representation fidelity,
 planning depth, and response-model error. (RU version: `docs/STUDIO.md`.)
 
+## Abstract
+
+The starting paper casts top-K retrieval as an MDP over the implicit-ALS posterior and
+plans with an optimistic transition that assumes every recommendation is accepted.
+Our reproduction shows this makes planning quality-inert in practice: the leverage
+vᵀPv driving the reward's alignment term is a popularity proxy bounded by ~d/n_items,
+so the planning layer degenerates to static cosine ranking (Static reproduced at
+.0704 vs paper .0694; Plan-1 gain not reproduced). We then ask: does a *stochastic*
+user model fix this? In controlled environments with known dynamics and an exact
+DP oracle we show: with a faithful state, feedback-conditioned stochastic planning
+reaches the oracle and beats the optimistic planner by +0.122 (CI95 [0.115, 0.129]);
+over the compressed MF posterior it does not differ from optimistic (−0.004).
+Deeper planning cuts regret 5–15× once the model is reasonable. On KuaiRand-1K,
+graded engagement (watch-ratio) is predictable and transfers to randomized exposure
+(AUC 0.839/0.826), while binary click is policy-bound and temporally miscalibrated.
+
+## Problem
+
+Sequential recommendation is a decision process: a recommendation changes the user and
+therefore what should be shown next. Model-based planning over the MF-MDP posterior is
+a lightweight way to exploit this — but its optimistic "always accepted" transition is
+a misspecified dynamics model, and it is unknown when planning over such posteriors
+helps at all, and when a learned stochastic response model changes the answer.
+
+## Solution
+
+A controlled evaluation framework (two documented generative environments with exact
+and approximate oracles) plus a hybrid dynamics model: a learned stochastic response
+model coupled with exact feedback-conditioned weighted fold-in transitions
+(Sherman–Morrison). All claims are validated against true-environment return J(π) with
+matched budgets, multiple seeds, and paired bootstrap CIs.
+
 ## Main result
 
 ![Main figure](figures/main_figure.png)

@@ -228,3 +228,7 @@ logs/
 ml-1m.zip
 
 logs_*.txt
+
+# LaTeX build artifacts
+*.aux
+*.log
