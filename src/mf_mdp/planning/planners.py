@@ -169,16 +169,30 @@ def _greedy_rho(V: np.ndarray, node: _Node, cfg: PlannerConfig) -> float:
     return best
 
 
-def _leaf_value(V: np.ndarray, node: _Node, cfg: PlannerConfig) -> float:
+def _horizon_extra(node: _Node, cfg: PlannerConfig, path_rs: list[float]) -> np.ndarray:
+    """Horizon/recency features for a V_logging model with horizon_features=True.
+
+    Mapping caveat (documented): remaining = horizon - depth (planning horizon, NOT the
+    user's real remaining session); mean/last reward from the current search path.
+    """
+    rem = max(0, cfg.horizon - node.depth)
+    mean_r = float(np.mean(path_rs)) if path_rs else 0.0
+    last_r = float(path_rs[-1]) if path_rs else 0.0
+    return np.array([np.log1p(rem), mean_r, last_r])
+
+
+def _leaf_value(V: np.ndarray, node: _Node, cfg: PlannerConfig, path_rs: list[float] | None = None) -> float:
     """Frontier leaf value G at a node, by configured leaf_evaluator.
 
     v_logging_ridge returns the LOGGING-POLICY value V_logging(s_h) in normalized
     reward units — it is NOT target-policy value (docs/PHASE4_DESIGN.md §4.2).
     """
+    path_rs = path_rs or []
     if cfg.leaf_evaluator == "v_logging_ridge":
         if cfg.value_model is None:
             raise ValueError("leaf_evaluator=v_logging_ridge requires value_model")
-        return float(np.clip(cfg.value_model.predict_value(node.state()), 0.0, 1.0 / (1.0 - cfg.gamma)))
+        extra = _horizon_extra(node, cfg, path_rs) if getattr(cfg.value_model, "horizon_features", False) else None
+        return float(np.clip(cfg.value_model.predict_value(node.state(), extra=extra), 0.0, 1.0 / (1.0 - cfg.gamma)))
     if cfg.leaf_evaluator == "zero":
         return 0.0
     if cfg.leaf_evaluator in ("original", "heuristic"):
@@ -186,7 +200,8 @@ def _leaf_value(V: np.ndarray, node: _Node, cfg: PlannerConfig) -> float:
     raise ValueError(f"unknown leaf_evaluator: {cfg.leaf_evaluator}")
 
 
-def _expand(V: np.ndarray, node: _Node, cfg: PlannerConfig) -> None:
+def _expand(V: np.ndarray, node: _Node, cfg: PlannerConfig, path_rs: list[float] | None = None) -> None:
+    path_rs = path_rs or []
     cand = exact_cosine_topl(V, node.u, node.consumed, cfg.expansion_width)
     for a in cand:
         v = V[a]
@@ -197,7 +212,7 @@ def _expand(V: np.ndarray, node: _Node, cfg: PlannerConfig) -> None:
         node.children[a] = child
         node.edge_r[a] = r_norm
         node.edge_n[a] = 1
-        node.edge_q[a] = r_norm + cfg.gamma * _leaf_value(V, child, cfg)
+        node.edge_q[a] = r_norm + cfg.gamma * _leaf_value(V, child, cfg, path_rs + [r_norm])
 
 
 def planK_topk(
@@ -210,19 +225,21 @@ def planK_topk(
     for _ in range(cfg.n_simulations):
         node = root
         path: list[tuple[_Node, int, _Node]] = []
+        path_rs: list[float] = []  # normalized rewards along the current path
         # 1-2. Selection + expansion.
         while node.depth < cfg.horizon:
             if not node.children:
-                _expand(V, node, cfg)
+                _expand(V, node, cfg, path_rs)
                 node.N += 1
                 break
             a = node.uct(cfg.c_uct)
             child = node.children[a]
             path.append((node, a, child))
+            path_rs.append(node.edge_r[a])
             node.N += 1
             node = child
         # 3. Leaf value at the frontier node.
-        G = _leaf_value(V, node, cfg)
+        G = _leaf_value(V, node, cfg, path_rs)
         # 4. Backprop discounted return-to-go.
         for parent, a, child in reversed(path):
             G = parent.edge_r[a] + cfg.gamma * G

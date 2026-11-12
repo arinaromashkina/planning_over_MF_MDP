@@ -37,6 +37,7 @@ def build_logged_trajectories(
     eta: float,
     gamma: float,
     max_t: int | None = None,
+    horizon_features: bool = False,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Returns (X_state, G): one row per (user, t) decision point on the ACTUAL history.
 
@@ -44,7 +45,10 @@ def build_logged_trajectories(
     (alpha_w=alpha, beta_w=1+alpha — the true re-fold per step, tested against direct
     re-folding). r_t is the paper-exact R0 reward of the realized (state, action),
     normalized to [0,1]. With max_t, only the LAST max_t decision points per user are
-    kept (recent states match MCTS leaf distribution better).
+    kept. With horizon_features=True, appends decision-time-legal horizon/recency
+    features: [log1p(remaining_steps), mean_past_reward, last_reward] — these track the
+    dominant scale components of G; an MCTS leaf can only supply them under a documented
+    horizon mapping (extrapolation caveat, see PHASE4_RESULTS.md).
     """
     rows_X, rows_G = [], []
     for sp in splits:
@@ -52,7 +56,6 @@ def build_logged_trajectories(
         T = len(seq)
         if T < 2:
             continue
-        # incremental exact states along the true history
         st = user_state(V, np.empty(0, dtype=np.int64), ials_cfg)
         rs = np.empty(T)
         states: list[MFState] = []
@@ -67,7 +70,15 @@ def build_logged_trajectories(
         t0 = max(0, T - max_t) if max_t is not None else 0
         for t in range(t0, T):
             G = float(np.sum(gamma ** np.arange(T - t) * rs[t:]))
-            rows_X.append(state_value_features(states[t]))
+            feats = state_value_features(states[t])
+            if horizon_features:
+                past = rs[:t]
+                feats = np.concatenate([
+                    feats,
+                    [np.log1p(T - t), float(past.mean()) if t > 0 else 0.0,
+                     float(rs[t - 1]) if t > 0 else 0.0],
+                ])
+            rows_X.append(feats)
             rows_G.append(G)
     return np.vstack(rows_X), np.asarray(rows_G)
 
@@ -78,6 +89,7 @@ class VLoggingRidge:
 
     lam: float = 1.0
     encoder: FeatureEncoder = field(default_factory=FeatureEncoder)
+    horizon_features: bool = False
     weights: np.ndarray | None = field(default=None, init=False)
 
     def fit(self, X: np.ndarray, G: np.ndarray) -> None:
@@ -88,11 +100,22 @@ class VLoggingRidge:
         reg[d, d] = 0.0
         self.weights = np.linalg.solve(Xb.T @ Xb + reg, Xb.T @ G)
 
-    def predict_value(self, state: MFState) -> float:
-        """Predicted normalized logging-policy return-to-go from `state`."""
+    def predict_value(self, state: MFState, extra: np.ndarray | None = None) -> float:
+        """Predicted normalized logging-policy return-to-go from `state`.
+
+        `extra` = the 3 horizon/recency features when horizon_features=True
+        ([log1p(remaining), mean_past_reward, last_reward]); at an MCTS leaf these are
+        supplied under a documented horizon mapping (remaining = horizon - depth;
+        past/last reward from the search path) — an extrapolation caveat.
+        """
         if self.weights is None:
             raise RuntimeError("model not fitted")
-        x = self.encoder.transform(state_value_features(state)[None, :])
+        feats = state_value_features(state)
+        if self.horizon_features:
+            if extra is None:
+                raise ValueError("horizon_features=True requires extra features")
+            feats = np.concatenate([feats, extra])
+        x = self.encoder.transform(feats[None, :])
         return float((np.hstack([x, [[1.0]]]) @ self.weights).item())
 
     def predict_batch(self, X: np.ndarray) -> np.ndarray:
