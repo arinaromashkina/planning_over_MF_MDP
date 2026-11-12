@@ -232,3 +232,6 @@ logs_*.txt
 # LaTeX build artifacts
 *.aux
 *.log
+*.bbl
+*.blg
+*.out
