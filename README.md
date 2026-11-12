@@ -80,8 +80,10 @@ separated (figures never re-run experiments).
 
 ## One-slide report
 
-[studio/slide_main.pdf](studio/slide_main.pdf) — figure + key message + notations
-(Scientific Studio week-8 format); talk script: [studio/ONE_MINUTE_SCRIPT_RU.md](studio/ONE_MINUTE_SCRIPT_RU.md).
+[studio/one_slide_scientific.pdf](studio/one_slide_scientific.pdf) — the course one-slide talk
+(transition diagram + ΔJ forest plot with paired bootstrap CIs); talk script:
+[studio/one_minute_scientific_ru.md](studio/one_minute_scientific_ru.md).
+(An alternative LaTeX variant: [studio/slide_main.pdf](studio/slide_main.pdf).)
 
 ## Repository layout
 
