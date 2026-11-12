@@ -18,9 +18,12 @@ Phase 5 (stochastic world model for sequential recommendation) on branch
   (-0.004); planning > greedy_mf by +0.041 (underpowered); all MF planners far below
   true-θ greedy (0.685) — representation-bound. Contrast isolates state quality as the
   binding requirement.
-- Gate E pending: KuaiRand-1K download in progress (~167MB, slow Zenodo).
-- Server NOT needed so far (all CPU-scale); will be needed for KuaiRand training at
-  scale and any neural (GRU) state encoder.
+- Gate E (KuaiRand-1K) first part done: loader + sessionization (30-min gap, documented),
+  chronological split, response models. wr80-on-clicks AUC 0.839/ECE 0.043 (transfers to
+  randomized exposure: 0.826); click AUC 0.607 but ECE 0.234 (temporal drift) and random-
+  subset AUC 0.515 (policy-bound). Selection bias in standard logs confirmed by random file.
+- Server NOT needed so far (all CPU-scale); KuaiRand full-scale work may need it.
+  NOTE: server SSH unreachable from the Mac since ~14:00 (user informed).
 
 ## Next steps
 
