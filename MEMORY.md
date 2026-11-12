@@ -2,33 +2,35 @@
 
 ## Current objective
 
-Phase 4 (reward/value foundation) on branch `phase4/reward-value-v1`. Prompt:
-`../Phase4_Reward_Value_Model_Execution_Prompt.md`. Results: `docs/PHASE4_RESULTS.md`.
+Phase 5 (stochastic world model for sequential recommendation) on branch
+`phase5/stochastic-world-model`. Prompt: `../Phase5.md`. Hypotheses/plan:
+`docs/PHASE5_HYPOTHESES.md`, `docs/PHASE5_EXPERIMENT_PLAN.md` (frozen protocol).
 
 ## Status (updated 2026-11-12)
 
-- Phase 0 + Phase 1 (ML-1M LLN) committed on main (140da9d) and pushed; diagnostics on
-  main (fb0411b). Phase 4 work is on branch `phase4/reward-value-v1` (NOT pushed — needs
-  owner approval per prompt §2).
-- Reward audit DONE (gate): MCTS paper-exact; Plan-1 'post' = post_transition variant;
-  canonical 'paper'; full-catalog crash = consumed-items bug in exact_cosine_topl (fixed,
-  regression test; addendum corrects the diagnostics report).
-- Phase 4 experiments DONE: response model AUC 0.62 calibrated (ECE 0.007); learned
-  rewards R1/R2 LOSE to paper R0 on ML-1M (weak 4-vs-5 signal, popularity-flavored);
-  V_logging base R2=0.019, horizon variant R2=0.989 (non-deployable interpolator);
-  E4: all MCTS leaf evaluators tie at R@10=0.0733, V_logging leaf ~10x cheaper than
-  greedy rho. 42/42 tests.
+- Gate A done: audit + literature review + hypotheses + formal problem + positioning.
+- Gate B done: Env-S (12-state discrete, exact DP oracle); greedy != DP; MCTS converges
+  (residual = near-ties). DP oracle bug (assimilation failure) found via MCTS, fixed.
+- Gate C/D done for Env-S: response model AUC 0.75; **H1 SUPPORTED in Env-S**:
+  stochastic-optimistic = +0.122 CI95 [0.115, 0.129]; oracle regret 0.006. H3: only
+  full-horizon planning reaches oracle; model accuracy not binding (250-3000 traj).
+- Env-C (MF-flavored) done: **H1 NOT supported there** — stochastic ≈ optimistic
+  (-0.004); planning > greedy_mf by +0.041 (underpowered); all MF planners far below
+  true-θ greedy (0.685) — representation-bound. Contrast isolates state quality as the
+  binding requirement.
+- Gate E pending: KuaiRand-1K download in progress (~167MB, slow Zenodo).
+- Server NOT needed so far (all CPU-scale); will be needed for KuaiRand training at
+  scale and any neural (GRU) state encoder.
 
-## Next steps (owner decision)
+## Next steps
 
-1. Push branch after owner review.
-2. KuaiRec (watch-ratio labels) — prerequisite for meaningful R1/R2.
-3. V_logging v2: recency/engagement features or sequence model; then V_target via
-   planner-rollout distillation in a validated model (still open, documented gap).
-4. Optional: GTS split implementation for RQ5.
+1. KuaiRand-1K inspection (fields, exposure semantics, splits) when download completes.
+2. Env-S harder response regime (observation noise) for the error-vs-depth curve (H3).
+3. PHASE5_RESULTS.md after Gate E; studio deliverables only after all gates.
 
 ## Open questions
 
-- Whether learned rewards can beat R0 anywhere (needs graded engagement labels).
-- Extrapolation of V_logging to MCTS optimistic states: unvalidated; measure feature-
-  space discrepancy before trusting leaf values.
+- Whether any MF-posterior regime can make stochastic planning matter (Env-C says no at
+  alignment 0.6 — test with stronger iALS training, e.g., 2000+ users).
+- H3 error-vs-depth interaction needs a regime where the response model is
+  genuinely hard to learn.
