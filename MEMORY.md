@@ -2,30 +2,33 @@
 
 ## Current objective
 
-Reproduce arXiv:2607.02115v2 (MF-MDP planning for candidate generation), then build the
-owner-chosen extension: learned reward + value models (Phase 4 of the brief; design in
-docs/PHASE4_DESIGN.md).
+Phase 4 (reward/value foundation) on branch `phase4/reward-value-v1`. Prompt:
+`../Phase4_Reward_Value_Model_Execution_Prompt.md`. Results: `docs/PHASE4_RESULTS.md`.
 
-## Status (updated 2026-11-11, evening)
+## Status (updated 2026-11-12)
 
-- Phase 0 + Phase 1 (ML-1M LLN) committed (140da9d) and pushed; verdict in REPRODUCTION.md:
-  Static reproduced, planning gains not reproduced in reachable regimes.
-- DIAGNOSTIC PHASE DONE (docs/PLANNING_DIAGNOSTICS.md): leverage is a popularity proxy
-  (Spearman up to 1.0); alignment term inert in good configs, harmful when active;
-  no planning gain in 9 geometry variants; full-catalog Plan-1 crashes via self-boost
-  popularity amplification (0.086 -> 0.044). No meaningful planning regime found.
-- Phase-4 prep done: PHASE4_DESIGN.md has explicit labeling contracts (response model /
-  utility / V_logging / V_target). Phase 4 NOT started (awaiting owner review).
+- Phase 0 + Phase 1 (ML-1M LLN) committed on main (140da9d) and pushed; diagnostics on
+  main (fb0411b). Phase 4 work is on branch `phase4/reward-value-v1` (NOT pushed — needs
+  owner approval per prompt §2).
+- Reward audit DONE (gate): MCTS paper-exact; Plan-1 'post' = post_transition variant;
+  canonical 'paper'; full-catalog crash = consumed-items bug in exact_cosine_topl (fixed,
+  regression test; addendum corrects the diagnostics report).
+- Phase 4 experiments DONE: response model AUC 0.62 calibrated (ECE 0.007); learned
+  rewards R1/R2 LOSE to paper R0 on ML-1M (weak 4-vs-5 signal, popularity-flavored);
+  V_logging base R2=0.019, horizon variant R2=0.989 (non-deployable interpolator);
+  E4: all MCTS leaf evaluators tie at R@10=0.0733, V_logging leaf ~10x cheaper than
+  greedy rho. 42/42 tests.
 
 ## Next steps (owner decision)
 
-1. Review docs/PLANNING_DIAGNOSTICS.md, then start Phase 4 (value-model v1: ridge MC-return
-   regression on MF-state features as MCTS leaf; measure depth reduction H6).
-2. Optional: vectorized MCTS fold-in batches (10-20x speedup) to afford full-set Plan-K.
+1. Push branch after owner review.
+2. KuaiRec (watch-ratio labels) — prerequisite for meaningful R1/R2.
+3. V_logging v2: recency/engagement features or sequence model; then V_target via
+   planner-rollout distillation in a validated model (still open, documented gap).
+4. Optional: GTS split implementation for RQ5.
 
 ## Open questions
 
-- Whether any iALS variant outside the documented family could open a planning regime —
-  diagnostics suggest the mechanism (popularity-proxy leverage) is structural; pursuing
-  unknown paper HPs further is not time-boxed.
-- GTS protocol implementation pending (needed for RQ5/Phase 5).
+- Whether learned rewards can beat R0 anywhere (needs graded engagement labels).
+- Extrapolation of V_logging to MCTS optimistic states: unvalidated; measure feature-
+  space discrepancy before trusting leaf values.
