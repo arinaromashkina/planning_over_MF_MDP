@@ -152,19 +152,54 @@ def run_depth(args):
     return {"J_oracle": float(J_oracle), "rows": rows}
 
 
+def run_noise(args):
+    """H3: regret vs (response-model error, planning depth) with latent logit noise.
+
+    The response model's irreducible+estimation error is controlled by noise_scale and
+    training-set size; the oracle uses noise-averaged probabilities.
+    """
+    rows = []
+    for noise in (0.5, 1.5, 3.0):
+        env = EnvS(EnvSConfig(seed=0, noise_scale=noise))
+        oracle = DPPolicy(env)
+        J_oracle = evaluate(oracle, env, 0, 0, args.n_rollouts, seed=999).mean()
+        for train_size in (250, 1000, 3000):
+            for depth in (2, 6):
+                Js, briers = [], []
+                for seed in range(args.seeds):
+                    trajs = gen_trajectories(env, "eps_greedy", train_size // 2, seed=60 + seed) + \
+                        gen_trajectories(env, "uniform", train_size // 2, seed=70 + seed)
+                    resp = LogisticResponse()
+                    resp.fit(env, trajs)
+                    rho_hat = estimate_rho(env, trajs)
+                    # held-out Brier of the response model (model-quality measure)
+                    test_trajs = gen_trajectories(env, "eps_greedy", 200, seed=800 + seed)
+                    yy = np.array([e for tr in test_trajs for (_, _, _, e, _) in tr], dtype=float)
+                    pp = np.array([resp.predict(env, s, f, i) for tr in test_trajs for (s, f, i, _, _) in tr])
+                    briers.append(brier_score(yy, pp))
+                    pol = ModelDP(env, resp, rho_hat, horizon=depth)
+                    Js.append(evaluate(pol, env, 0, 0, args.n_rollouts, seed=3000 + seed).mean())
+                rows.append({"noise": noise, "train_size": train_size, "depth": depth,
+                             "J_mean": float(np.mean(Js)), "J_std": float(np.std(Js)),
+                             "regret_vs_oracle": float(J_oracle - np.mean(Js)),
+                             "model_brier": float(np.mean(briers))})
+    return {"rows": rows}
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--checks", action="store_true")
     parser.add_argument("--learn", action="store_true")
     parser.add_argument("--ablation", action="store_true")
     parser.add_argument("--depth", action="store_true")
+    parser.add_argument("--noise", action="store_true")
     parser.add_argument("--n-rollouts", type=int, default=4000)
     parser.add_argument("--seeds", type=int, default=5)
     args = parser.parse_args()
     t0 = time.time()
 
     out = {}
-    if args.checks or not (args.learn or args.ablation or args.depth):
+    if args.checks or not (args.learn or args.ablation or args.depth or args.noise):
         out["a1_checks"] = run_checks(args)
     if args.learn:
         out["a2_learn"] = run_learn(args)
@@ -172,12 +207,14 @@ def main() -> None:
         out["a3_ablation"] = run_ablation(args)
     if args.depth:
         out["a4_depth"] = run_depth(args)
+    if args.noise:
+        out["a4_noise"] = run_noise(args)
     out["runtime_s"] = time.time() - t0
     print(json.dumps(out, indent=2))
 
     out_dir = Path(os.environ.get("MFMDP_OUTPUT_ROOT", "./outputs")) / "phase5"
     out_dir.mkdir(parents=True, exist_ok=True)
-    name = "env_a_" + ("checks" if args.checks else "") + ("learn" if args.learn else "") + ("ablation" if args.ablation else "") + ("depth" if args.depth else "")
+    name = "env_a_" + ("checks" if args.checks else "") + ("learn" if args.learn else "") + ("ablation" if args.ablation else "") + ("depth" if args.depth else "") + ("noise" if args.noise else "")
     with open(out_dir / f"{name}.json", "w") as f:
         json.dump(out, f, indent=2)
     print(f"wrote {out_dir / (name + '.json')} ({time.time()-t0:.0f}s)")

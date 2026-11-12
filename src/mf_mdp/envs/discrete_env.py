@@ -36,6 +36,7 @@ class EnvSConfig:
     kappa_sat: float = 0.35  # fatigue penalty per level
     c0: float = -1.5  # termination hazard intercept
     c1: float = 4.0  # termination hazard slope on reward
+    noise_scale: float = 0.0  # per-step latent logit noise on engagement (H3 regime)
     seed: int = 0
 
 
@@ -73,9 +74,21 @@ class EnvS:
 
     # ---- model primitives -------------------------------------------------
 
-    def engagement_prob(self, s: int, i: int) -> float:
+    def engagement_prob(self, s: int, i: int, eps: float = 0.0) -> float:
         c = self.cfg
-        return float(_sigmoid(c.a * (self.M[i][s] - c.theta0) + c.b * self.q[i]))
+        return float(_sigmoid(c.a * (self.M[i][s] - c.theta0) + c.b * self.q[i] + eps))
+
+    def engagement_prob_avg(self, s: int, i: int, n_mc: int = 4000, seed: int = 0) -> float:
+        """Noise-averaged engagement probability E_eps[sigmoid(logit + eps)].
+
+        With per-step i.i.d. logit noise this is the correct planning quantity
+        (the noise only adds Bernoulli variance). Used by the oracle in noisy regimes.
+        """
+        if self.cfg.noise_scale == 0.0:
+            return self.engagement_prob(s, i)
+        rng = np.random.default_rng(seed + s * 131 + i * 17)
+        eps = rng.normal(0.0, self.cfg.noise_scale, n_mc)
+        return float(np.mean(_sigmoid(self.cfg.a * (self.M[i][s] - self.cfg.theta0) + self.cfg.b * self.q[i] + eps)))
 
     def reward(self, s: int, f: int, i: int, engaged: bool) -> float:
         if not engaged:
@@ -99,7 +112,8 @@ class EnvS:
 
     def step(self, s: int, f: int, i: int, rng: np.random.Generator):
         """One environment step. Returns (reward, terminated, next_s, next_f)."""
-        engaged = rng.random() < self.engagement_prob(s, i)
+        eps = rng.normal(0.0, self.cfg.noise_scale) if self.cfg.noise_scale > 0 else 0.0
+        engaged = rng.random() < self.engagement_prob(s, i, eps)
         r = self.reward(s, f, i, engaged)
         terminated = rng.random() < self.termination_prob(r)
         ns = self.next_mode(s, i, engaged, rng)
@@ -107,7 +121,7 @@ class EnvS:
         return r, terminated, ns, nf
 
     def expected_immediate_reward(self, s: int, f: int, i: int) -> float:
-        p = self.engagement_prob(s, i)
+        p = self.engagement_prob_avg(s, i)
         return p * self.reward(s, f, i, True)
 
     # ---- evaluation ---------------------------------------------------------
@@ -157,7 +171,7 @@ class DPPolicy:
                 for f in range(3):
                     best_q, best_i = -np.inf, 0
                     for i in range(N):
-                        p = env.engagement_prob(s, i)
+                        p = env.engagement_prob_avg(s, i)
                         r_eng = env.reward(s, f, i, True)
                         term_eng = env.termination_prob(r_eng)
                         dominant = int(np.argmax(env.M[i]))
