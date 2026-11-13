@@ -108,6 +108,7 @@ outputs/                 ← run artifacts (git-ignored)
 - [PLANNING_DIAGNOSTICS.md](docs/PLANNING_DIAGNOSTICS.md) — leverage/alignment analysis (+ audit addendum)
 - [PHASE4_RESULTS.md](docs/PHASE4_RESULTS.md) — reward/value model experiments
 - [PHASE5_HYPOTHESES.md](docs/PHASE5_HYPOTHESES.md) / [PHASE5_EXPERIMENT_PLAN.md](docs/PHASE5_EXPERIMENT_PLAN.md) — frozen protocol
+- [PHASE5_RESULTS.md](docs/PHASE5_RESULTS.md) — **Phase 5 results** (gates A–E, H1–H3)
 - [LITERATURE_REVIEW_PHASE5.md](docs/LITERATURE_REVIEW_PHASE5.md) — comparison table
 - [STUDIO.md](docs/STUDIO.md) — course alignment (RU), experiment goal
 - [EXPERIMENT_LOG.md](docs/EXPERIMENT_LOG.md) — every run with metrics
