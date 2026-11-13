@@ -13,6 +13,13 @@ learned value models** on top of the MF-MDP (paper §5 future work: "learn ... v
 Do not jump ahead of Phase 1: the reproduction must exist and be tested before reward/value
 models are evaluated against it.
 
+Branch `h1/belief-vs-preference-dynamics` holds a NEW hypothesis line (started after
+Phase 5): separating epistemic belief updates (MF posterior fold-in) from true
+preference dynamics in model-based planning. Design: `docs/H1_BELIEF_VS_PREFERENCE_DESIGN.md`.
+Existing modules must stay untouched there (new code in new files) so Phase 1/4/5
+results remain reproducible. Note: H1.x numbering there is unrelated to the
+Phase-5 H1–H3 hypotheses in `docs/PHASE5_HYPOTHESES.md`.
+
 ## Paper ground truth (verified against 2607.02115v2.pdf)
 
 - State `s = (P, u)`, `P = A^{-1}`, per-user `A = lam*I + sum_{i in I} c_i v_i v_i^T` (all catalog
