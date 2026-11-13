@@ -393,6 +393,12 @@ predictable and transfers to randomized exposure; binary click is policy-bound a
 temporally miscalibrated (ECE $0.234$ on the chronological test) --- direct evidence of
 temporal drift for calibration-sensitive uses.
 
+The transition validation at full scale (all eligible sessions; top-5000 pool; iALS on
+clicks) shows the MF posterior state predicting the next in-session click with test AUC
+$0.586$ (train $0.659$), ECE $0.044$; per-position AUC is flat in $0.57$--$0.61$ with
+late-session calibration degradation (ECE $0.099$ at position $7$). On real data, as in
+Env-C, the MF representation is the bottleneck.
+
 \begin{figure}[t]
 \centering
 \includegraphics[width=\textwidth]{figures/main_figure.pdf}

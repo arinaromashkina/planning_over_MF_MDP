@@ -66,7 +66,7 @@ def build_session_examples(log, V, ials_cfg, video_pool_mask, log_pop, max_event
     # keep sessions with >= 5 events
     keep = (ends - starts) >= 5
     starts, ends = starts[keep], ends[keep]
-    if len(starts) > max_sessions:
+    if max_sessions and len(starts) > max_sessions:
         sel = rng.choice(len(starts), max_sessions, replace=False)
         starts, ends = starts[sel], ends[sel]
 
@@ -109,6 +109,8 @@ def main() -> None:
     parser.add_argument("--n-steps", type=int, default=400)
     parser.add_argument("--max-train-events", type=int, default=300_000)
     parser.add_argument("--max-test-events", type=int, default=150_000)
+    parser.add_argument("--max-train-sessions", type=int, default=40_000)
+    parser.add_argument("--max-test-sessions", type=int, default=25_000)
     args = parser.parse_args()
     t0 = time.time()
 
@@ -132,10 +134,12 @@ def main() -> None:
 
     log_pop = np.log1p(np.bincount(train.video_idx, minlength=len(video_map)).astype(float))
     print("building session examples (train)...", flush=True)
-    Xtr, ytr, ptr = build_session_examples(train, V, ials_cfg, pool_mask, log_pop, args.max_train_events, seed=0, max_sessions=40_000)
+    cap_tr = None if args.max_train_events <= 0 else args.max_train_events
+    cap_te = None if args.max_test_events <= 0 else args.max_test_events
+    Xtr, ytr, ptr = build_session_examples(train, V, ials_cfg, pool_mask, log_pop, cap_tr, seed=0, max_sessions=args.max_train_sessions)
     print(f"  {len(Xtr):,} train examples", flush=True)
     print("building session examples (test)...", flush=True)
-    Xte, yte, pte = build_session_examples(test, V, ials_cfg, pool_mask, log_pop, args.max_test_events, seed=1, max_sessions=25_000)
+    Xte, yte, pte = build_session_examples(test, V, ials_cfg, pool_mask, log_pop, cap_te, seed=1, max_sessions=args.max_test_sessions)
     print(f"  {len(Xte):,} test examples", flush=True)
 
     enc = FeatureEncoder()

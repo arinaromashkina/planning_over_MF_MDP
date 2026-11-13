@@ -78,11 +78,12 @@ Response models (chronological split; `outputs/phase5/kuairand_response.json`):
 | long_view | 0.627 | 0.104 | 0.542 | |
 | wr80 on clicks | **0.839** | **0.043** | **0.826** | graded engagement transfers |
 
-Transition validation (`outputs/phase5/kuairand_transition.json`): MF posterior states
-along sessions (top-5000 pool, iALS on clicks) predict the next in-session click only
-weakly (test AUC 0.592, ECE 0.044; train AUC 0.661); position 0 (cold start) weakest
-(0.511); calibration degrades with session depth (ECE up to 0.11). On real data, as in
-Env-C, the MF representation is the bottleneck.
+Transition validation, full scale on the L4 server (all eligible sessions, no caps;
+`outputs/phase5/kuairand_transition_full.json`): MF posterior states predict the next
+in-session click with test AUC 0.586 (train 0.659), log-loss 0.647, BCE 0.227, ECE
+0.044 (base rate 0.635). Per-position AUC is flat in 0.57–0.61 (cold start is not
+special at full scale); calibration degrades late in sessions (ECE 0.099 at position 7).
+On real data, as in Env-C, the MF representation is the bottleneck.
 
 ## Limitations (explicit)
 
@@ -91,8 +92,8 @@ Env-C, the MF representation is the bottleneck.
 - Simulator results are diagnostics, not evidence of real-user improvement.
 - No OPE claims: KuaiRand propensities unverified; ML-1M has no exposure labels.
 - `V_logging` never `V_target`; target-policy value unimplemented.
-- The transition validation used a session subsample (31.7k train / 1.8k test pool
-  examples) due to runtime; full-scale runs belong on the server.
+- The transition validation is full-scale on the server (43.7k train / 5.0k test pool
+  examples); the per-position analysis uses the first 8 positions of each session.
 
 ## Conclusions
 
