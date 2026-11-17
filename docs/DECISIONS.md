@@ -64,3 +64,20 @@ Format: date — decision — context/assumption — consequence.
   full-catalog Plan-K (n_sim=100): the planner's own argmax, not a true-reward optimum.
   J(pi) = raw eq. (8) discounted return of the recommended slate rolled out in the
   MF-MDP model (unnormalized rewards).
+- 2026-11-17 (H4) — Cross-response hypothesis line on branch `h4/cross-response-model`.
+  Owner hypothesis: grounded nonlinear interactions (cos×hist_len, relevance×recency,
+  hist-watch-ratio×similarity, uncertainty×popularity, h⊙v, repeat×closeness) should
+  beat the logistic response model; ladder LR → LR+grounded crosses → FM → MLP → DCN-v2
+  (conditional). Pre-registered falsification in docs/H4_CROSS_RESPONSE_MODEL_DESIGN.md.
+  DECISIONS: (1) interaction #2 (recency) infeasible in discrete-step Env-C; (2) the
+  explicit h⊙v is an MLP-only arm (dot already aggregates it — owner's remark); (3) DCN-v2
+  trigger (M3 beats M1 on valid LL beyond noise) NOT met on Env-C (0.3293 vs 0.3252) nor
+  ML-1M (0.6177 vs 0.61769) → M4 never built; (4) hazard model stays shared LR on base10
+  in every arm (hypothesis is about the response model only); (5) KuaiRand coverage kept
+  Gate-E-exact (top-5000 pool → test 1.8k rows, rand probe 205 rows — power caveat
+  documented; ML-1M with n=29k test carries the tight CIs); (6) verified null at both
+  levels on all three testbeds (Env-C J, ML-1M, KuaiRand): history features linearly
+  explain the entire gain (+0.056..+0.185 AUC), grounded crosses ≈ random crosses ≈ 0,
+  FM/MLP overfit at 2.4k-31.7k-row scales. **H4 REJECTED**; owner caveat strengthened:
+  predictive and planning gains decouple even in sign (fm: worst holdout ECE, highest J
+  point estimate, ns).

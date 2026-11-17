@@ -69,3 +69,13 @@ planning, not about final recommendation quality. Design:
 `docs/H3_LEARNED_ACTION_PROPOSALS_DESIGN.md`. New code lives in
 `src/mf_mdp/proposal/` (sasrec/pools/planning), `experiments/h3/`,
 `tests/test_h3.py`; torch is optional (import-guarded); existing modules untouched.
+
+Branch `h4/cross-response-model`: cross-feature response models — logistic baseline
+vs LR + grounded interactions (owner's six) vs random-cross control vs FM vs MLP vs
+MLP+u⊙v, on two levels (predictive: KuaiRand temporal split + randomized-exposure
+subset, ML-1M; decision: closed-loop J in Env-C). **H4 REJECTED at both levels on
+all three testbeds** (history features linearly carry the gain; grounded ≡ random
+crosses ≡ 0; no J contrast CI95 excludes 0; DCN-v2 trigger not met, never built).
+Design: `docs/H4_CROSS_RESPONSE_MODEL_DESIGN.md`. New code lives in
+`src/mf_mdp/interactions/` (fm/mlp/cross/planner), `experiments/h4/`,
+`tests/test_h4.py`; existing modules untouched.
