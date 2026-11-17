@@ -2,38 +2,42 @@
 
 ## Current objective
 
-Phase 5 (stochastic world model for sequential recommendation) on branch
-`phase5/stochastic-world-model`. Prompt: `../Phase5.md`. Hypotheses/plan:
-`docs/PHASE5_HYPOTHESES.md`, `docs/PHASE5_EXPERIMENT_PLAN.md` (frozen protocol).
+H2 (hybrid sequential belief state) on branch `h2/hybrid-sequential-state`.
+Design: `docs/H2_HYBRID_SEQUENTIAL_STATE_DESIGN.md`. (Phase 5 on
+`phase5/stochastic-world-model` is complete: `docs/PHASE5_RESULTS.md`; separate H1
+line on `h1/belief-vs-preference-dynamics`.)
 
-## Status (updated 2026-11-12)
+## Status (updated 2026-11-17)
 
-- Gate A done: audit + literature review + hypotheses + formal problem + positioning.
-- Gate B done: Env-S (12-state discrete, exact DP oracle); greedy != DP; MCTS converges
-  (residual = near-ties). DP oracle bug (assimilation failure) found via MCTS, fixed.
-- Gate C/D done for Env-S: response model AUC 0.75; **H1 SUPPORTED in Env-S**:
-  stochastic-optimistic = +0.122 CI95 [0.115, 0.129]; oracle regret 0.006. H3: only
-  full-horizon planning reaches oracle; model accuracy not binding (250-3000 traj).
-- Env-C (MF-flavored) done: **H1 NOT supported there** — stochastic ≈ optimistic
-  (-0.004); planning > greedy_mf by +0.041 (underpowered); all MF planners far below
-  true-θ greedy (0.685) — representation-bound. Contrast isolates state quality as the
-  binding requirement.
-- Gate E (KuaiRand-1K) first part done: loader + sessionization (30-min gap, documented),
-  chronological split, response models. wr80-on-clicks AUC 0.839/ECE 0.043 (transfers to
-  randomized exposure: 0.826); click AUC 0.607 but ECE 0.234 (temporal drift) and random-
-  subset AUC 0.515 (policy-bound). Selection bias in standard logs confirmed by random file.
-- Server NOT needed so far (all CPU-scale); KuaiRand full-scale work may need it.
-  NOTE: server SSH unreachable from the Mac since ~14:00 (user informed).
+- H2-E1 factorial done on Env-C (5 seeds): state {mf,seq,hybrid} x transition
+  {optimistic,stochastic}, depth-2 matched budget, q_hat from logs.
+  **H2 REJECTED at this scale.** J: mf+stochastic 0.227 best learned arm; hybrid+stochastic
+  0.148 (hybrid-mf = -0.080 CI95 [-0.155,-0.004]); seq worst (0.097) despite next-item
+  recall TIED with mf (0.384 vs 0.384) — seq response model much worse (AUC 0.577 vs
+  0.734, ECE 0.073 vs 0.013). Negative controls barely move J (seq no_response +0.018) —
+  order/feedback/action conditioning does not drive planning value here. Caveat: GRU
+  trained from scratch on 400x6 events vs iALS-structured MF features (inductive-bias
+  confound); alpha-sweep and E-init-from-iALS are the cheap follow-ups.
+- Surprise vs Phase 5: stoch-opt@mf = +0.071 [+0.027,+0.115] under q_hat-from-logs,
+  while Phase 5 measured -0.004 under TRUE env.q — the stochastic-transition advantage
+  appears when item quality is estimated, not given. Worth a q_hat ablation before
+  claiming.
+- Server still SSH-unreachable (since ~2026-11-12); H2 is CPU-scale anyway.
+- Tests: tests/test_h2.py 9/9 green; pre-existing UNRELATED failure
+  tests/test_h1.py::test_greedy_differs_from_oracle_in_envP (H1 pilot open item, not
+  touched by H2).
 
 ## Next steps
 
-1. KuaiRand-1K inspection (fields, exposure semantics, splits) when download completes.
-2. Env-S harder response regime (observation noise) for the error-vs-depth curve (H3).
-3. PHASE5_RESULTS.md after Gate E; studio deliverables only after all gates.
+1. q_hat ablation (true-q vs log-estimated) to isolate the stoch-opt sign flip.
+2. alpha/horizon sweep for H2 (regime boundary, per H2 design Part 6 risk 3).
+3. Optional: E initialized from iALS V (project dim) to reduce the inductive-bias gap.
+4. H2 real-data check on KuaiRand sessions only if (1)-(2) show any signal.
 
 ## Open questions
 
-- Whether any MF-posterior regime can make stochastic planning matter (Env-C says no at
-  alignment 0.6 — test with stronger iALS training, e.g., 2000+ users).
-- H3 error-vs-depth interaction needs a regime where the response model is
-  genuinely hard to learn.
+- Whether ANY sequential state can beat the MF posterior for PLANNING (not prediction)
+  in the 400-user data regime, or whether the MF posterior is simply the right statistic
+  under optimism-corrected fold-ins.
+- Whether the H2 mechanism claim survives in a popularity-driven env (controls C1-C3
+  were built to catch popularity smuggling; with no positive gain they are moot).

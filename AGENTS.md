@@ -44,3 +44,28 @@ models are evaluated against it.
 - Never invent paper-reported values; log every assumption in docs/DECISIONS.md.
 - No datasets/checkpoints/outputs/logs in git (`.gitignore` covers them).
 - One codebase, local Mac = development, remote L4 server = compute (docs/INFRASTRUCTURE.md).
+
+## Research branches (hypothesis lines beyond Phase 5)
+
+Branch `h1/belief-vs-preference-dynamics`: separating epistemic belief updates (MF
+posterior fold-in) from true preference dynamics in model-based planning. Design:
+`docs/H1_BELIEF_VS_PREFERENCE_DESIGN.md`. Note: H1.x numbering there is unrelated to
+the Phase-5 H1–H3 in `docs/PHASE5_HYPOTHESES.md`.
+
+Branch `h2/hybrid-sequential-state`: hybrid belief state
+`b_t = (P_t, u_t, h_t)` — MF posterior plus a GRU sequential state with
+feedback-conditioned dynamics `p_theta(h_{t+1}, y_t | h_t, a_t)` — against the
+MF-posterior-only state in a state x transition factorial (Env-C) with mandatory
+negative controls (shuffle / no-response / random-action). Design:
+`docs/H2_HYBRID_SEQUENTIAL_STATE_DESIGN.md`. "H2" here is unrelated to the Phase-5 H2
+(learned reward/value). New code lives in `src/mf_mdp/sequential/` (numpy GRU + world
+model), `src/mf_mdp/planning/hybrid.py`, `experiments/h2/`, `tests/test_h2.py`;
+existing modules stay untouched so Phase 1/4/5 remain reproducible.
+
+Branch `h3/sequential-action-proposals`: sequential model (SASRec, PyTorch) as an
+ACTION PROPOSER, not a recommender — candidate pool `C_t = TopM p_theta(a|h_t)` and
+MCTS searching only inside `C_t`; hypothesis about the quality–compute trade-off of
+planning, not about final recommendation quality. Design:
+`docs/H3_LEARNED_ACTION_PROPOSALS_DESIGN.md`. New code lives in
+`src/mf_mdp/proposal/` (sasrec/pools/planning), `experiments/h3/`,
+`tests/test_h3.py`; torch is optional (import-guarded); existing modules untouched.
