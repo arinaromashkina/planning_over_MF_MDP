@@ -246,3 +246,49 @@ GRU; initializing E from iALS V is a cheap deconfounder. (b) Scale: 400 training
 users; Env-S-style regimes with richer trajectories remain untested for H2.
 (c) Single-generator regime (Env-C alpha_pos 0.35); the alpha sweep may move the
 boundary, per Part 6 risk 3.
+
+---
+
+## Part 8 — H2-E2 grid result (2026-11-18, server, commit 424a4bd)
+
+Output: `outputs/h2/grid/summary.json` (40 jobs = 8 cells x 5 seeds, 6 workers,
+~25 min on adrianna). Cells: scale {400 (pilot_ref), 2000, 5000} x alpha_pos
+{0.1, 0.35, 0.6} + einit2000_a035 (E-init-from-iALS arms) + ctrl2000_a035
+(negative controls at scale) + qtrue_pilot (true-q ablation).
+
+**Verdict: H2 is robustly REJECTED — at no scale and no dynamics strength does the
+hybrid state beat the MF posterior, and the sequential state never beats either.**
+
+1. **State factor**: hybrid−mf <= 0 in ALL cells (pilot stochastic −0.080
+   [−0.156, −0.004]; every other cell ns, never positive). seq is the worst arm in
+   every cell (0.09-0.15 vs mf 0.11-0.24).
+2. **Scale does not rescue the sequential state**: seq response AUC falls with
+   training users (0.577@400 -> 0.552@5000) while mf's rises (0.734 -> 0.765);
+   next-item recall also degrades (0.385 -> 0.329 vs mf 0.383 -> 0.407). The GRU
+   world model is not data-limited in a way more users fix — the iALS-feature
+   logistic is simply the better statistic on this environment family.
+3. **Dynamics strength**: at alpha_pos=0.6 all arms converge (0.22-0.24, ns) —
+   strong assimilation homogenizes outcomes, no state representation wins. At
+   alpha=0.1 everything is mediocre and equal.
+4. **E-init deconfounder**: initializing the sequential embeddings from iALS V
+   does not produce planning gains (seq +0.017 ns; hybrid+einit 0.176 < mf 0.186)
+   and degrades the seq response model (AUC 0.477 vs 0.544 — note the hid_dim
+   16-vs-32 capacity confound).
+5. **Negative controls at scale (n=2000)**: all six control deltas ns — no hidden
+   order/feedback/action-conditioning mechanism.
+6. **q-mode ablation (the decisive side-finding)**: stoch−opt @mf = −0.002 ns under
+   TRUE q vs +0.071 [+0.027,+0.115] under log-estimated q at pilot scale; and
+   stoch−opt@mf shrinks monotonically with scale (+0.071 -> +0.016 -> −0.005 at
+   400/2000/5000). The apparent stochastic-transition advantage is an interaction
+   between OPTIMISTIC planning and ESTIMATED item quality — under the true reward
+   weights we reproduce Phase 5's null exactly. Any future claim about stochastic
+   transitions must control for reward-side estimation error.
+7. **Ceiling**: every learned arm remains far below true-theta greedy (0.65-0.72)
+   in all cells. Combined with H4 (response capacity null) and Phase 4 (leaf-value
+   null), the evidence says the binding constraint on Env-C J is UPSTREAM of the
+   state/response/leaf components — candidate pool, termination, horizon semantics,
+   or logging-policy bias. That is the open question H2 leaves behind.
+
+Methodological note: the H2 line's controls (C1-C3) and the q-mode cell are
+reusable machinery for any follow-up line; the negative-controls protocol proved
+its worth by ruling out mechanism claims cheaply.
