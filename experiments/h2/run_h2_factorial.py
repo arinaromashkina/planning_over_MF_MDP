@@ -197,8 +197,10 @@ def seq_response_holdout(world, holdout, k=10):
             "next_item_recall10": float(np.mean(next_hits)) if next_hits else None}
 
 
-def run_seed(seed, n_train, n_eval, epochs, run_controls):
-    env = EnvC(EnvCConfig(seed=seed))
+def run_seed(seed, n_train, n_eval, epochs, run_controls, alpha_pos=None,
+             q_mode="est", einit=False):
+    env = EnvC(EnvCConfig(seed=seed) if alpha_pos is None
+               else EnvCConfig(seed=seed, alpha_pos=alpha_pos))
     rng = np.random.default_rng(seed)
     ials_cfg = IALSConfig(dim=16, alpha=10.0, lam=0.1, n_iter=15)
     train_thetas = gen_theta0s(n_train, env, seed=1000 + seed)
@@ -206,7 +208,7 @@ def run_seed(seed, n_train, n_eval, epochs, run_controls):
     positives = np.array([(u, t[0]) for u, tr in enumerate(trajs) for t in tr], dtype=np.int64)
     _, V = train_ials(positives, n_train, env.n_items, ials_cfg, seed=seed)
     log_pop = np.log1p(np.bincount(positives[:, 1], minlength=env.n_items).astype(float))
-    q_hat = estimate_q_hat(trajs, env.n_items)
+    q_hat = estimate_q_hat(trajs, env.n_items) if q_mode == "est" else env.q.astype(float)
     enc, resp, hresp = train_mf_models(trajs, V, ials_cfg, log_pop)
 
     wcfg = SeqWorldConfig(n_epochs=epochs, seed=seed)
@@ -218,15 +220,29 @@ def run_seed(seed, n_train, n_eval, epochs, run_controls):
             w = SeqWorldModel(env.n_items, SeqWorldConfig(n_epochs=epochs, seed=seed))
             w.fit(trajs, control=c)
             world_by_control[c] = w
+    world_einit = None
+    if einit:
+        ecfg = SeqWorldConfig(n_epochs=epochs, seed=seed, emb_dim=V.shape[1],
+                              hid_dim=V.shape[1])
+        world_einit = SeqWorldModel(env.n_items, ecfg, V_init=V)
+        world_einit.fit(trajs)
 
     planners = make_planners(V, ials_cfg, log_pop, q_hat, env.cfg.kappa_sat,
                              world, world_by_control, enc, resp, hresp)
+    if world_einit is not None:
+        for arm in ("seq", "hybrid"):
+            cfg = HybridPlannerConfig(state_arm=arm, transition="stochastic")
+            planners[f"{arm}+stochastic+einit"] = HybridPlanner(
+                V, ials_cfg, world_einit, resp, hresp, enc, log_pop,
+                q_hat, env.cfg.kappa_sat, cfg)
 
     holdout = log_trajectories(env, gen_theta0s(n_eval, env, seed=6000 + seed), rng)
     predictive = {"mf": mf_response_holdout(holdout, V, ials_cfg, enc, resp, log_pop),
                   "seq": seq_response_holdout(world, holdout)}
     for c, w in world_by_control.items():
         predictive[f"seq+{c}"] = seq_response_holdout(w, holdout)
+    if world_einit is not None:
+        predictive["seq+einit"] = seq_response_holdout(world_einit, holdout)
 
     eval_thetas = gen_theta0s(n_eval, env, seed=5000 + seed)
     out = {"predictive": predictive}
@@ -246,13 +262,18 @@ def main() -> None:
     ap.add_argument("--epochs", type=int, default=150)
     ap.add_argument("--controls", action="store_true", default=True)
     ap.add_argument("--no-controls", dest="controls", action="store_false")
+    ap.add_argument("--alpha-pos", type=float, default=None, help="override Env-C assimilation strength")
+    ap.add_argument("--q-mode", choices=["est", "true"], default="est",
+                    help="item quality for the shared reward: log-estimated or env true q")
+    ap.add_argument("--einit", action="store_true", help="add seq/hybrid arms with E init from iALS V")
     ap.add_argument("--quick", action="store_true", help="tiny smoke run")
     args = ap.parse_args()
     if args.quick:
         args.seeds, args.n_train_users, args.n_eval_users, args.epochs = 1, 100, 60, 30
 
     t0 = time.time()
-    per_seed = [run_seed(s, args.n_train_users, args.n_eval_users, args.epochs, args.controls)
+    per_seed = [run_seed(s, args.n_train_users, args.n_eval_users, args.epochs, args.controls,
+                         alpha_pos=args.alpha_pos, q_mode=args.q_mode, einit=args.einit)
                 for s in range(args.seeds)]
 
     names = list(per_seed[0].keys())

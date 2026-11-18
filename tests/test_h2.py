@@ -166,3 +166,15 @@ def test_hybrid_user_vec_concatenates_geometries():
     e = pl._emb(0)
     assert e.shape == (4 + 8,)
     assert -1.0 - 1e-9 <= pl.relevance(st, 0) <= 1.0 + 1e-9
+
+
+def test_world_model_v_init():
+    import pytest
+
+    rng = np.random.default_rng(0)
+    V = rng.normal(0, 1, (10, 16))
+    world = SeqWorldModel(10, SeqWorldConfig(emb_dim=16, hid_dim=8, n_epochs=1, seed=1),
+                          V_init=V)
+    assert np.allclose(world.E[:10], V)
+    with pytest.raises(ValueError):
+        SeqWorldModel(10, SeqWorldConfig(emb_dim=8), V_init=V)

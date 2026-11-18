@@ -50,12 +50,17 @@ def _sig(x: np.ndarray) -> np.ndarray:
 class SeqWorldModel:
     """GRU state + response/hazard heads + next-item readout, trained by teacher forcing."""
 
-    def __init__(self, n_items: int, cfg: SeqWorldConfig = SeqWorldConfig()):
+    def __init__(self, n_items: int, cfg: SeqWorldConfig = SeqWorldConfig(),
+                 V_init: np.ndarray | None = None):
         self.cfg = cfg
         self.n_items = n_items
         rng = np.random.default_rng(cfg.seed)
         m, dz = cfg.emb_dim, cfg.hid_dim
         self.E = rng.normal(0.0, 0.05, size=(n_items + 1, m))  # last row = start pad
+        if V_init is not None:
+            if V_init.shape != (n_items, m):
+                raise ValueError(f"V_init must be ({n_items}, {m}); got {V_init.shape}")
+            self.E[:n_items] = V_init  # deconfounder: share iALS geometry (H2-E2)
         self.gru = GRU(GRUConfig(n_in=m + 2, n_hidden=dz, lr=cfg.lr, l2=cfg.l2,
                                  n_epochs=cfg.n_epochs, seed=cfg.seed), rng)
         s = np.sqrt(1.0 / dz)
