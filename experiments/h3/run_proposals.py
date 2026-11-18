@@ -68,7 +68,23 @@ def load_data_and_V(seed: int = 0) -> tuple[Dataset, np.ndarray, IALSConfig]:
     return data, V, MF_CFG
 
 
-def load_sasrec_logits(data: Dataset, splits, device: str, seed: int = 0) -> np.ndarray:
+def load_sasrec_logits(
+    data: Dataset,
+    splits,
+    device: str,
+    seed: int = 0,
+    npz_path: str | None = None,
+) -> np.ndarray:
+    """Next-item logits aligned to `splits` (positional: runners use prefix slices).
+
+    Two sources: (1) npz cache 'logits' computed on the FULL data.splits order —
+    server-friendly, no torch needed; (2) the SASRec checkpoint scored locally.
+    """
+    if npz_path:
+        arr = np.load(npz_path)["logits"]
+        if arr.shape[0] < len(splits):
+            raise ValueError(f"{npz_path}: {arr.shape[0]} rows < {len(splits)} splits")
+        return arr[: len(splits)]
     from mf_mdp.proposal.sasrec import SASRec, SASRecConfig, score_histories, build_seq_array
     import torch
 
@@ -80,6 +96,16 @@ def load_sasrec_logits(data: Dataset, splits, device: str, seed: int = 0) -> np.
     model.load_state_dict(torch.load(ckpt, map_location=device))
     seqs = build_seq_array([sp.prefix for sp in splits], data.n_items, cfg.maxlen)
     return score_histories(model, seqs, device=device)
+
+
+def stage_export_logits(args) -> None:
+    """Score the FULL splits list with the local checkpoint; save the npz cache."""
+    data, _, _ = load_data_and_V()
+    logits = load_sasrec_logits(data, data.splits, args.device, seed=args.seed)
+    out = Path(args.logits_out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    np.savez(out, logits=logits.astype(np.float32), n_items=data.n_items)
+    print(f"wrote {out} shape={logits.shape} dtype=float32")
 
 
 def build_pool(arm: str, m: int, V, state, sas_row, rng, rho: float = 0.25) -> np.ndarray:
@@ -99,7 +125,7 @@ def build_pool(arm: str, m: int, V, state, sas_row, rng, rho: float = 0.25) -> n
 def stage_pools(args) -> None:
     data, V, ials_cfg = load_data_and_V()
     splits = data.splits
-    sas_logits = load_sasrec_logits(data, splits, args.device)
+    sas_logits = load_sasrec_logits(data, splits, args.device, npz_path=args.logits_npz)
     rng = np.random.default_rng(args.seed)
     ms = [int(x) for x in args.ms.split(",")]
     arms = ["mf_ann", "sasrec", "union", "mf_rand_rho0.10", "mf_rand_rho0.25"]
@@ -166,7 +192,7 @@ def _cfg_dict() -> dict:
 def stage_policy(args) -> None:
     data, V, ials_cfg = load_data_and_V()
     splits = data.splits[: args.n_users]
-    sas_logits = load_sasrec_logits(data, data.splits, args.device)[: args.n_users]
+    sas_logits = load_sasrec_logits(data, data.splits, args.device, npz_path=args.logits_npz)[: args.n_users]
     rng = np.random.default_rng(args.seed)
     ms = [int(x) for x in args.ms.split(",")]
     arms = ["full"] + [a for a in args.arms.split(",") if a != "full"]
@@ -204,7 +230,7 @@ def stage_policy(args) -> None:
 def stage_latency(args) -> None:
     data, V, ials_cfg = load_data_and_V()
     splits = data.splits[: args.n_users]
-    sas_logits = load_sasrec_logits(data, data.splits, args.device)[: args.n_users]
+    sas_logits = load_sasrec_logits(data, data.splits, args.device, npz_path=args.logits_npz)[: args.n_users]
     nsims = [int(x) for x in args.nsims.split(",")]
     arms = [a for a in args.arms.split(",")]
     m = args.m
@@ -245,7 +271,7 @@ def _write(stage: str, results: dict, args) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--stage", required=True, choices=["pools", "oracle", "policy", "latency"])
+    ap.add_argument("--stage", required=True, choices=["pools", "oracle", "policy", "latency", "export_logits"])
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--device", default="mps")
     ap.add_argument("--ms", default="25,50,100,200")
@@ -255,9 +281,12 @@ def main() -> None:
     ap.add_argument("--k", type=int, default=10)
     ap.add_argument("--m", type=int, default=100, help="pool size for the latency stage")
     ap.add_argument("--overwrite", action="store_true")
+    ap.add_argument("--logits-npz", default=None, help="cached SASRec logits (full splits order)")
+    ap.add_argument("--logits-out", default="checkpoints/sasrec_logits_ml1m_seed0.npz")
     args = ap.parse_args()
     {"pools": stage_pools, "oracle": stage_oracle,
-     "policy": stage_policy, "latency": stage_latency}[args.stage](args)
+     "policy": stage_policy, "latency": stage_latency,
+     "export_logits": stage_export_logits}[args.stage](args)
 
 
 if __name__ == "__main__":
