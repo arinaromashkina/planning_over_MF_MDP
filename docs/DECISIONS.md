@@ -81,3 +81,15 @@ Format: date — decision — context/assumption — consequence.
   FM/MLP overfit at 2.4k-31.7k-row scales. **H4 REJECTED**; owner caveat strengthened:
   predictive and planning gains decouple even in sign (fm: worst holdout ECE, highest J
   point estimate, ns).
+- 2026-11-18 (H4, big-run addendum) — Server runs (10 seeds x 2000/1000 Env-C; uncapped
+  KuaiRand) resolve the scale caveat: the predictive null replicates verbatim (m1==c1==m0h
+  to 4 decimals at KuaiRand test n=5,056; ML-1M bootstrap CIs unchanged), and FM/MLP stay
+  below LR with 5x training rows — the feature set is at its information ceiling, the null
+  is not an overfitting artifact. mlp_uv is the ONLY arm with a significant J contrast
+  (+0.0071 CI95 [+0.0002,+0.0156], 8/10 seeds positive but seeds 3/6 carry the mass) and
+  it has NO predictive gain on any testbed — logged as a fragile transmission-decoupling
+  observation, not H4 support (pre-registered rule requires BOTH levels). NOTED FOR
+  FOLLOW-UP: lr-optimistic = +0.018 [-0.002,+0.039] at 2000 train users — H2's
+  stochastic-transition advantage (and our own 400-user +0.045) does not replicate at
+  5x scale; the J-moving story needs re-examination (candidate: q_hat estimation noise
+  was the advantage's source, and it vanishes as q_hat improves).
