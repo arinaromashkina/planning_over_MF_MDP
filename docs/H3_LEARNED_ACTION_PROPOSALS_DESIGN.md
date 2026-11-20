@@ -196,4 +196,96 @@ Reused unchanged: `data/movielens.py`, `mf.py`, `mdp.py`, `planning/candidates.p
 
 ## Part 6 — Results
 
-(filled in after the runs; see EXPERIMENT_LOG.md)
+All runs: ML-1M LLN (min_rating 4, n_test=1, n_valid=1), MF d=64 α=40 λ=1 it=20 (reproduction
+config), planner Plan-K η=1 γ=0.9 c_uct=1 l=20 K=10, cosine. SASRec: d=64, 2 blocks, 1 head,
+maxlen 200, dropout 0.2, full-softmax CE, early stop on valid next-item R@10 (best 0.1437);
+model-level next-item R@10/nDCG@10: valid .1437/.0727, test **.0989/.0469** (vs MF static_cos
+test .0696 — the sequential model is the better plain ranker, which pool coverage reflects).
+
+### 6.1 Pool coverage (n=6035; gt_coverage = P(test item ∈ C_t))
+
+| M | mf_ann | sasrec | union (size) | mf_rand ρ=.10 | mf_rand ρ=.25 |
+|---|---|---|---|---|---|
+| 25 | .139 | **.246** | .306 (44.9) | .132 | .116 |
+| 50 | .229 | **.358** | .436 (86.1) | .216 | .195 |
+| 100 | .359 | **.486** | **.581** (165.3) | .340 | .304 |
+| 200 | .503 | **.619** | **.713** (320.4) | .485 | .452 |
+
+SASRec is ~2× more sample-efficient as a proposer (sasrec@50 ≈ mf_ann@100). Union is
+super-additive: at ~165 items it covers .581 vs .44/.55 for either source interpolated to the
+same size. Random expansion strictly loses ground-truth coverage (random items almost never
+contain the target: expected gain ≈ ρM/n_items).
+
+### 6.2 Planner-oracle coverage (n=300; oracle = first action of UNrestricted Plan-K, nsim=100)
+
+| M | mf_ann | sasrec | union | mf_rand ρ=.25 |
+|---|---|---|---|---|
+| 25 | .930 | .337 | .930 | .900 |
+| 50 | .960 | .480 | .967 | .957 |
+| 100 | .983 | .650 | .983 | .977 |
+| 200 | .987 | .753 | .987 | .987 |
+
+Mirror image of 6.1: the MF pool almost always contains the planner's own preferred action
+(unsurprising — top-M by cosine is the planner's root expansion rule), the SASRec pool filters
+it out 35–65% of the time. Union keeps both. **The candidate bottleneck is real exactly as the
+owner framed it — for the planner's preference. Whether that preference is worth preserving is
+a separate question, answered in 6.4: no.**
+
+### 6.3 Policy at fixed simulations (nsim=100, full test set n=6035, server)
+
+| config | R@10 | nDCG@10 | J(π) | latency/user |
+|---|---|---|---|---|
+| full (catalog 3706) | .0696 | .0340 | 9.4609 | 2.01 s* |
+| mf_ann M50 / M100 | .0696 | .0340 | 9.4609 | 1.05 / 1.07 s* |
+| union M50 / M100 | .0696 | .0340 | 9.4609 | 1.06 / 1.11 s* |
+| mf_rand M50 / M100 | .0696 | .0340 | 9.4609 | 1.04 / 1.07 s* |
+| **sasrec M50** | **.1079** | **.0500** | 9.1400 | 1.04 s* |
+| **sasrec M100** | **.0916** | **.0437** | 9.2812 | 1.07 s* |
+
+\* server timings under 9-way CPU contention — use the ratios, not absolutes; on a quiet
+machine (latency stage, n=300): full 0.953 s vs pools 0.60–0.64 s per user at nsim=100
+(**~1.5× speedup; ~1.9× from the server ratios**).
+
+### 6.4 Latency stage (n=300, M=100, quiet machine)
+
+R@10 is IDENTICAL for nsim ∈ {25, 50, 100, 200} in every arm (full .0733, all MF-pools .0733,
+sasrec .0933 at every budget). Search budget does not bind at all: the tree converges to the
+same trajectory immediately. Latency is linear in nsim. At a fixed 0.6 s/user budget, full runs
+~63 sims and pools run ~100 — quality unchanged either way.
+
+### 6.5 Verdict against the pre-registered falsification criteria
+
+- **H3-b (trade-off) SUPPORTED, strongly.** M=50 MF-ANN pools reproduce the unrestricted
+  policy EXACTLY (identical R@10/nDCG/J on all 6035 users — the pool contains everything the
+  planner would pick) at roughly half the latency; and because quality is nsim-invariant, the
+  same output is reached at nsim=25 (~0.15 s/user local). Shrinking the action space costs
+  nothing on ML-1M; on VK-scale catalogs (ANN over ~5k pool vs full catalog) the saving is the
+  paper's original motivation and only grows.
+- **H3-c (complementarity) SPLIT.** Union covers strictly more ground-truth than either source
+  (6.1) but at the policy level union ≡ mf_ann ≡ mf_rand ≡ full: inside a pool containing MF
+  items, the planner's cosine-dominated eq. (8) value re-selects the MF items. Complementarity
+  exists in the pools, is annihilated by the planner. Random exploration is strictly dominated
+  (loses coverage, changes nothing).
+- **H3-a (coverage) SUPPORTED with the central twist.** SASRec pools cover the true next item
+  far better; the planner-oracle coverage is worse (6.2). The twist: **the planner's oracle is
+  not the real optimum.** J(π) is perfectly anti-correlated with actual R@10 across arms
+  (MF-pools max J, min R@10; sasrec pools min J, max R@10). The unconstrained planner's
+  "optimal action" is worth sacrificing — in the flat-planning leverage regime (REPRODUCTION.md)
+  the planner contributes no value of its own; a SASRec-only pool CONSTRAINS it into a region
+  where its cosmetic re-ranking even adds a small lift over the raw model
+  (sasrec@M50 R@10 .1079 vs raw SASRec .0989, ≈2σ, flagged as suggestive).
+- **Owner's "transformer as generator, not recommender" — supported, mechanism refined.** On
+  this dataset the transformer helps not by proposing better actions for the planner's value,
+  but by *restricting* a misaligned planner. Where the planner's value is aligned with real
+  reward (a planning-active regime — not reachable on ML-1M with iALS HPs, see REPRODUCTION.md),
+  the union pool would deliver its coverage advantage; testing that is the natural follow-up
+  on a dataset where Plan-K ≠ Static (KuaiRec, or a high-leverage MF regime).
+
+### 6.6 Artifacts
+
+- Local: `outputs/h3/h3_pools_seed0.json` (6035 users), `h3_latency_seed0.json` (300),
+  `oracle_actions_n300_seed0.json`, `oracle_coverage_seed0.json`,
+  `sasrec_train_seed0.json`; checkpoints `sasrec_ml1m_seed0.pt`, `sasrec_logits_ml1m_seed0.npz`.
+- Server (adrianna, /root/work/mf-mdp-h3): `outputs/policy/<config>/h3/h3_policy_seed0.json`
+  for 9 configs (each also contains a full-catalog replicate — 9 consistent copies);
+  logs `logs/policy_*.log`. Copied to `outputs/h3/server_policy/` locally.
