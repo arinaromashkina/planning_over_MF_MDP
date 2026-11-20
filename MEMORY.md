@@ -6,8 +6,12 @@ H4 (cross-feature response models) — line COMPLETE, hypothesis REJECTED at bot
 levels, on branch `h4/cross-response-model`.
 Design: `docs/H4_CROSS_RESPONSE_MODEL_DESIGN.md`.
 Open lines: H1 (`h1/belief-vs-preference-dynamics`, pilot sign-off open), H2
-(rejected on Env-C at pilot scale), H3 (`h3/sequential-action-proposals`, WIP
-snapshot committed 2026-11-17). Phase 5 complete (`docs/PHASE5_RESULTS.md`).
+(**rejected at every scale/dynamics regime**, E1+E2, see the h2 branch Parts 7-8), H3
+(**COMPLETE**, branch `h3/sequential-action-proposals` @ c376cd1: H3-b SUPPORTED —
+MF pools ≡ full-catalog policy exactly at ~half latency; H3-a SUPPORTED w/ twist —
+sasrec@M50 R@10 .1079 vs full .0696 at LOWER J, J anti-correlated w/ R@10; H3-c SPLIT —
+union coverage super-additive but ≡ MF at policy level). Phase 5 complete
+(`docs/PHASE5_RESULTS.md`). Consolidated report: `docs/H1_H4_HYPOTHESES_REPORT_RU.md`.
 
 ## Status (updated 2026-11-20)
 
